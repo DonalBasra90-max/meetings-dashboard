@@ -31,7 +31,7 @@ header p{font-size:.82rem;color:var(--muted);margin-top:4px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* ── Controls bar ────────────────────────────────────────────────────────── */
-.controls{position:relative;z-index:200;margin:14px 32px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.controls{position:sticky;top:0;z-index:500;margin:0;padding:10px 32px;background:rgba(8,9,15,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border2);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 
 /* Date mode toggle */
 .mode-toggle{display:flex;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:3px;gap:3px}
@@ -51,7 +51,7 @@ header p{font-size:.82rem;color:var(--muted);margin-top:4px}
 .btn-reset:hover{border-color:var(--red);color:var(--red)}
 
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
-.filter-section{position:relative;z-index:190;margin:10px 32px 0;background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:14px 18px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.filter-section{position:sticky;top:53px;z-index:490;margin:0;padding:14px 32px;background:rgba(22,24,34,.97);backdrop-filter:blur(12px);border-bottom:1px solid var(--border2);display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
 .filter-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px;position:relative}
 .filter-group label{font-size:.65rem;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
 .ms-btn{background:var(--card2);border:1.5px solid var(--border2);border-radius:9px;padding:8px 10px 8px 11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.8rem;font-weight:500;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:6px;min-height:36px;user-select:none}
@@ -209,7 +209,7 @@ header p{font-size:.82rem;color:var(--muted);margin-top:4px}
 .sg-chip{margin-top:5px;text-align:center}
 
 /* Dual bars */
-.dual-wrap{padding:10px 16px 14px}
+.dual-wrap{padding:10px 16px 14px;max-height:380px;overflow-y:auto}.dual-wrap::-webkit-scrollbar{width:3px}.dual-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 .dual-row{display:flex;align-items:center;gap:9px;padding:4px 0;border-radius:7px;transition:.1s}
 .dual-row:hover{background:rgba(255,255,255,.02)}
 .dual-name{width:110px;flex-shrink:0;font-size:.73rem;color:var(--muted);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -361,6 +361,7 @@ footer{text-align:center;padding:14px 32px 24px;font-size:.7rem;color:var(--mute
 </div>
 
 <!-- Main dashboard -->
+<div id="main-dashboard">
 <div class="dashboard">
   <div class="kpi-row" id="kpi-row"></div>
   <div class="row-3col">
@@ -397,6 +398,7 @@ footer{text-align:center;padding:14px 32px 24px;font-size:.7rem;color:var(--mute
   </div>
 </div>
 
+</div><!-- /main-dashboard -->
 <footer>Meetings Dashboard &middot; 5,982 records &middot; Updated 06 May 2026, 08:41 AM</footer>
 
 <script>
@@ -605,11 +607,12 @@ function removeChip(key,val){
 
 // ── Comparison mode detection (priority: agent>client>campaign>year>month) ───
 function getCompMode(){
-  if(SEL.agent.size===2)    return {type:'agent',    periods:[...SEL.agent].sort()};
-  if(SEL.client.size===2)   return {type:'client',   periods:[...SEL.client].sort()};
-  if(SEL.campaign.size===2) return {type:'campaign', periods:[...SEL.campaign].sort()};
-  if(SEL.year.size===2)     return {type:'year',     periods:[...SEL.year].sort()};
-  if(SEL.month.size===2)    return {type:'month',    periods:[...SEL.month].sort((a,b)=>MONTHS.indexOf(a)-MONTHS.indexOf(b))};
+  // Sort so that the LATEST/highest value is Period A (current), earlier is Period B (baseline)
+  if(SEL.agent.size===2)    return {type:'agent',    periods:[...SEL.agent].sort().reverse()};
+  if(SEL.client.size===2)   return {type:'client',   periods:[...SEL.client].sort().reverse()};
+  if(SEL.campaign.size===2) return {type:'campaign', periods:[...SEL.campaign].sort().reverse()};
+  if(SEL.year.size===2)     return {type:'year',     periods:[...SEL.year].sort((a,b)=>b-a)};  // latest year first
+  if(SEL.month.size===2)    return {type:'month',    periods:[...SEL.month].sort((a,b)=>MONTHS.indexOf(b)-MONTHS.indexOf(a))};  // latest month first
   return null;
 }
 
@@ -728,10 +731,13 @@ function renderCampTable(rows){
 
 // ══ COMPARISON ENGINE ═════════════════════════════════════════════════════════
 function delta(a,b){
+  // a = current period (A), b = baseline period (B)
+  // up (green) = current is higher = growth
+  // dn (red)   = current is lower  = degrowth
   if(a===b)return{cls:'eq',short:'No Change'};
-  if(b===0)return{cls:'up',short:`+${a}`};
+  if(b===0)return{cls:'up',short:`+${a} (new)`};
   const p=Math.round((a-b)/b*100);
-  return p>0?{cls:'up',short:`+${p}%`}:{cls:'dn',short:`${p}%`};
+  return p>0?{cls:'up',short:`+${p}% ▲`}:{cls:'dn',short:`${p}% ▼`};
 }
 
 function renderComparison(){
@@ -788,12 +794,18 @@ function renderComparison(){
   tag.textContent=dimLabel+(isDateComp?' · '+modeLabel:'');
   tag.className='comp-dim-tag '+comp.type;
 
+  const growthTotal = tB>0 ? Math.round((tA-tB)/tB*100) : 0;
+  const growthLabel = growthTotal>0
+    ? `<strong style="color:var(--green)">&#9650; +${growthTotal}% growth</strong> vs ${pB}`
+    : growthTotal<0
+    ? `<strong style="color:var(--red)">&#9660; ${growthTotal}% degrowth</strong> vs ${pB}`
+    : `<strong style="color:var(--muted)">No change</strong> vs ${pB}`;
   document.getElementById('comp-desc').innerHTML=
-    `Comparing <strong style="color:var(--accent)">${pA}</strong> vs <strong style="color:var(--amber)">${pB}</strong> `+
-    `by <strong>${dimLabel}</strong>${ctxStr}. &nbsp;`+
-    `<strong style="color:var(--accent)">${pA}</strong>: ${tA.toLocaleString()} meetings, ${rateA}% completed. &nbsp;`+
-    `<strong style="color:var(--amber)">${pB}</strong>: ${tB.toLocaleString()} meetings, ${rateB}% completed. &nbsp;`+
-    `<strong style="color:var(--green)">&#9650; Leader: ${winner}</strong>.`;
+    `<strong style="color:var(--accent)">${pA}</strong> (current) vs <strong style="color:var(--amber)">${pB}</strong> (baseline) `+
+    `by <strong>${dimLabel}</strong>${ctxStr}.<br/>`+
+    `<strong style="color:var(--accent)">${pA}</strong>: ${tA.toLocaleString()} meetings &middot; ${rateA}% completion rate. &nbsp;`+
+    `<strong style="color:var(--amber)">${pB}</strong>: ${tB.toLocaleString()} meetings &middot; ${rateB}% completion rate. &nbsp;`+
+    `${growthLabel}.`;
 
   // ── KPI comparison ──────────────────────────────────────────────────────────
   const kpiDefs=[
@@ -855,7 +867,7 @@ function renderComparison(){
   rA.forEach(r=>{const k=r[barKey];if(k)bA[k]=(bA[k]||0)+1;});
   rB.forEach(r=>{const k=r[barKey];if(k)bB[k]=(bB[k]||0)+1;});
   const allB=[...new Set([...Object.keys(bA),...Object.keys(bB)])]
-    .sort((x,y)=>((bA[y]||0)+(bB[y]||0))-((bA[x]||0)+(bB[x]||0))).slice(0,10);
+    .sort((x,y)=>((bA[y]||0)+(bB[y]||0))-((bA[x]||0)+(bB[x]||0)));  // show ALL, no limit
   const mxB=Math.max(...allB.map(c=>Math.max(bA[c]||0,bB[c]||0)),1);
   document.getElementById('bar-chart-title').textContent=barLabel+' Comparison';
   document.getElementById('bar-chart-badge').textContent=allB.length+' '+barLabel.toLowerCase()+'s';
@@ -912,12 +924,21 @@ function renderComparison(){
 // ── Main render ───────────────────────────────────────────────────────────────
 function render(){
   const rows=getRows();
-  renderKPIs(rows);
-  renderDonut(rows);
-  renderBars('client-bars','client-badge','Client','#22d3ee',rows);
-  renderBars('agent-bars','agent-badge','Meeting Scheduled By Acnt Mngr','#a78bfa',rows);
-  renderTrend(rows);
-  renderCampTable(rows);
+  const comp=getCompMode();
+
+  // Toggle: in comparison mode hide main dashboard, show only comparison
+  const mainDash=document.getElementById('main-dashboard');
+  if(comp){
+    mainDash.style.display='none';
+  } else {
+    mainDash.style.display='';
+    renderKPIs(rows);
+    renderDonut(rows);
+    renderBars('client-bars','client-badge','Client','#22d3ee',rows);
+    renderBars('agent-bars','agent-badge','Meeting Scheduled By Acnt Mngr','#a78bfa',rows);
+    renderTrend(rows);
+    renderCampTable(rows);
+  }
   renderComparison();
   renderChips();
 }
